@@ -1,0 +1,22 @@
+# Core requirements for agent-personas framework
+# Keeping minimal to maximize compatibility
+
+# No external dependencies required for core functionality
+# All dependencies are optional and handled via extras_require
+
+# Development dependencies (install with: pip install -e ".[dev]")
+# pytest>=6.0
+# pytest-cov
+# black
+# flake8  
+# mypy
+
+# Example dependencies (install with: pip install -e ".[examples]")
+# jupyter
+# matplotlib
+# pandas
+
+# Documentation dependencies (install with: pip install -e ".[docs]")
+# sphinx
+# sphinx-rtd-theme
+# sphinx-autodoc-typehints
