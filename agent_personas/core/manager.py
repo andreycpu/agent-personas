@@ -6,8 +6,23 @@ from typing import Optional, Dict, Any, List, Callable
 from datetime import datetime
 import logging
 
-from .persona import Persona
+from .persona import Persona, PersonaValidationError
 from .registry import PersonaRegistry
+
+
+class PersonaManagerError(Exception):
+    """Base exception for persona manager errors."""
+    pass
+
+
+class PersonaActivationError(PersonaManagerError):
+    """Exception raised when persona activation fails."""
+    pass
+
+
+class PersonaRegistrationError(PersonaManagerError):
+    """Exception raised when persona registration fails."""
+    pass
 
 
 class PersonaManager:
@@ -49,8 +64,26 @@ class PersonaManager:
         
     def register_persona(self, persona: Persona) -> None:
         """Register a new persona."""
-        self.registry.register(persona)
-        self.logger.info(f"Registered persona: {persona.name}")
+        try:
+            if not isinstance(persona, Persona):
+                raise PersonaRegistrationError(f"Expected Persona instance, got {type(persona)}")
+            
+            # Validate persona before registration
+            persona.validate()
+            
+            # Check if persona with same name already exists
+            if self.registry.exists(persona.name):
+                raise PersonaRegistrationError(f"Persona with name '{persona.name}' already exists")
+            
+            self.registry.register(persona)
+            self.logger.info(f"Successfully registered persona: {persona.name}")
+            
+        except PersonaValidationError as e:
+            self.logger.error(f"Persona validation failed for '{persona.name}': {e}")
+            raise PersonaRegistrationError(f"Persona validation failed: {e}") from e
+        except Exception as e:
+            self.logger.error(f"Failed to register persona '{persona.name}': {e}")
+            raise PersonaRegistrationError(f"Registration failed: {e}") from e
         
     def create_persona(
         self,
@@ -77,21 +110,47 @@ class PersonaManager:
         Returns:
             Created persona instance
         """
-        persona = Persona(
-            name=name,
-            description=description,
-            traits=traits,
-            conversation_style=conversation_style,
-            emotional_baseline=emotional_baseline,
-            metadata=metadata
-        )
-        
-        self.register_persona(persona)
-        
-        if activate:
-            self.activate_persona(name)
+        try:
+            if not isinstance(name, str) or not name.strip():
+                raise PersonaRegistrationError("Persona name must be a non-empty string")
             
-        return persona
+            if self.registry.exists(name):
+                raise PersonaRegistrationError(f"Persona '{name}' already exists")
+            
+            if traits and not isinstance(traits, dict):
+                raise PersonaRegistrationError("Traits must be a dictionary")
+            
+            if not isinstance(conversation_style, str):
+                raise PersonaRegistrationError("Conversation style must be a string")
+            
+            if not isinstance(emotional_baseline, str):
+                raise PersonaRegistrationError("Emotional baseline must be a string")
+            
+            if metadata and not isinstance(metadata, dict):
+                raise PersonaRegistrationError("Metadata must be a dictionary")
+            
+            persona = Persona(
+                name=name,
+                description=description,
+                traits=traits,
+                conversation_style=conversation_style,
+                emotional_baseline=emotional_baseline,
+                metadata=metadata
+            )
+            
+            self.register_persona(persona)
+            
+            if activate:
+                success = self.activate_persona(name)
+                if not success:
+                    self.logger.warning(f"Created persona '{name}' but failed to activate it")
+            
+            self.logger.info(f"Successfully created persona '{name}'")
+            return persona
+            
+        except Exception as e:
+            self.logger.error(f"Failed to create persona '{name}': {e}")
+            raise
         
     def activate_persona(self, name: str) -> bool:
         """
@@ -101,25 +160,51 @@ class PersonaManager:
             name: Name of persona to activate
             
         Returns:
-            True if successfully activated, False otherwise
+            True if successfully activated
+            
+        Raises:
+            PersonaActivationError: If activation fails
         """
-        if not self.registry.exists(name):
-            self.logger.warning(f"Persona '{name}' not found")
-            return False
+        try:
+            if not isinstance(name, str) or not name.strip():
+                raise PersonaActivationError("Persona name must be a non-empty string")
             
-        previous_persona = self._active_persona
-        self._active_persona = self.registry.get(name)
-        
-        if previous_persona:
-            self._persona_history.append(previous_persona.name)
+            if not self.registry.exists(name):
+                raise PersonaActivationError(f"Persona '{name}' not found in registry")
             
-        self.logger.info(f"Activated persona: {name}")
-        
-        # Notify callbacks
-        for callback in self._switch_callbacks:
-            callback(previous_persona, self._active_persona)
+            previous_persona = self._active_persona
+            new_persona = self.registry.get(name)
             
-        return True
+            if new_persona is None:
+                raise PersonaActivationError(f"Failed to retrieve persona '{name}' from registry")
+            
+            # Validate the persona before activation
+            new_persona.validate()
+            
+            self._active_persona = new_persona
+            
+            if previous_persona:
+                self._persona_history.append(previous_persona.name)
+            
+            self.logger.info(f"Successfully activated persona: {name}")
+            
+            # Notify callbacks with error handling
+            for i, callback in enumerate(self._switch_callbacks):
+                try:
+                    callback(previous_persona, self._active_persona)
+                except Exception as e:
+                    self.logger.error(f"Callback {i} failed during persona switch: {e}")
+            
+            return True
+            
+        except PersonaValidationError as e:
+            self.logger.error(f"Persona validation failed for '{name}': {e}")
+            raise PersonaActivationError(f"Persona validation failed: {e}") from e
+        except Exception as e:
+            self.logger.error(f"Failed to activate persona '{name}': {e}")
+            if isinstance(e, PersonaActivationError):
+                raise
+            raise PersonaActivationError(f"Activation failed: {e}") from e
         
     def deactivate_persona(self) -> Optional[Persona]:
         """Deactivate the current persona."""
@@ -138,8 +223,20 @@ class PersonaManager:
         return previous_persona
         
     def switch_persona(self, name: str) -> bool:
-        """Switch to a different persona."""
-        return self.activate_persona(name)
+        """
+        Switch to a different persona.
+        
+        Args:
+            name: Name of persona to switch to
+            
+        Returns:
+            True if successfully switched
+        """
+        try:
+            self.activate_persona(name)
+            return True
+        except PersonaActivationError:
+            return False
         
     def revert_persona(self) -> bool:
         """Revert to the previous persona in history."""
@@ -154,7 +251,20 @@ class PersonaManager:
         callback: Callable[[Optional[Persona], Optional[Persona]], None]
     ) -> None:
         """Add a callback to be called when personas are switched."""
-        self._switch_callbacks.append(callback)
+        try:
+            if not callable(callback):
+                raise PersonaManagerError("Callback must be callable")
+            
+            if callback in self._switch_callbacks:
+                self.logger.warning("Callback already registered, skipping duplicate")
+                return
+            
+            self._switch_callbacks.append(callback)
+            self.logger.debug(f"Added switch callback: {callback}")
+            
+        except Exception as e:
+            self.logger.error(f"Failed to add switch callback: {e}")
+            raise PersonaManagerError(f"Failed to add callback: {e}") from e
         
     def remove_switch_callback(
         self, 
