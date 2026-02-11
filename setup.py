@@ -43,6 +43,8 @@ setup(
     python_requires=">=3.8",
     install_requires=[
         # Core dependencies - keeping minimal for maximum compatibility
+        "typing_extensions>=4.0.0; python_version<'3.10'",
+        "dataclasses>=0.6; python_version<'3.7'",
     ],
     extras_require={
         "dev": [
