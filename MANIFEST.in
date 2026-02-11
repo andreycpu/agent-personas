@@ -1,0 +1,25 @@
+include README.md
+include LICENSE
+include MANIFEST.in
+include requirements.txt
+include setup.py
+include .gitignore
+
+# Include example files
+recursive-include examples *.py *.json *.md
+
+# Include documentation
+recursive-include docs *.rst *.md *.txt *.py *.bat *.css *.js
+
+# Include test files
+recursive-include tests *.py
+
+# Include configuration files
+include *.ini *.cfg *.yaml *.yml
+
+# Exclude compiled files and caches
+global-exclude __pycache__
+global-exclude *.py[cod]
+global-exclude *.so
+global-exclude .DS_Store
+global-exclude *.egg-info
