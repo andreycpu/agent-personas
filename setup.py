@@ -48,11 +48,18 @@ setup(
     ],
     extras_require={
         "dev": [
-            "pytest>=6.0",
-            "pytest-cov",
-            "black",
-            "flake8",
-            "mypy",
+            "pytest>=7.0",
+            "pytest-cov>=4.0",
+            "pytest-mock>=3.10",
+            "pytest-asyncio>=0.21",
+            "black>=23.0",
+            "flake8>=6.0",
+            "flake8-docstrings>=1.7",
+            "flake8-import-order>=0.18",
+            "mypy>=1.0",
+            "bandit[toml]>=1.7",
+            "pre-commit>=3.0",
+            "isort>=5.12",
         ],
         "examples": [
             "jupyter",
